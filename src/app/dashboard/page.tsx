@@ -1,19 +1,63 @@
 "use client";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { ClipboardList, CheckCircle, Clock, AlertTriangle, ChevronRight, MoreHorizontal } from "lucide-react";
 import Link from "next/link";
+import { fetchDashboardData } from "../../lib/services/googleSheetApi";
+import type { DashboardSummary } from "../../types";
+
+const emptyDashboardSummary: DashboardSummary = {
+  totalCases: 0,
+  closedCases: 0,
+  inProgressCases: 0,
+  urgentCases: 0,
+  missingDocumentCases: 0,
+  nearDueCases: 0,
+  overdueCases: 0,
+};
 
 export default function DashboardPage() {
+  const [summary, setSummary] = useState<DashboardSummary>(emptyDashboardSummary);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadDashboard() {
+      try {
+        setIsLoading(true);
+        const data = await fetchDashboardData();
+
+        if (isActive) {
+          setSummary(data);
+        }
+      } catch {
+        if (isActive) {
+          setSummary(emptyDashboardSummary);
+        }
+      } finally {
+        if (isActive) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    loadDashboard();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       {/* 5 Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
         {[
-          { title: "เคสทั้งหมด", value: "0", icon: <ClipboardList size={24}/>, color: "text-blue-600", bg: "bg-blue-600", link: "/dashboard/tasks" },
-          { title: "กำลังดำเนินการ", value: "0", icon: <CheckCircle size={24}/>, color: "text-green-600", bg: "bg-green-600", link: "/dashboard/tasks" },
-          { title: "ใกล้ครบกำหนด", value: "0", icon: <Clock size={24}/>, color: "text-amber-500", bg: "bg-amber-500", link: "/dashboard/near-due" },
-          { title: "เกินกำหนด", value: "0", icon: <AlertTriangle size={24}/>, color: "text-red-500", bg: "bg-red-500", link: "/dashboard/overdue", border: "border-red-200" },
-          { title: "ปิดงานแล้ว", value: "0", icon: <CheckCircle size={24}/>, color: "text-teal-600", bg: "bg-teal-600", link: "/dashboard/closed" },
+          { title: "เคสทั้งหมด", value: String(summary.totalCases), icon: <ClipboardList size={24}/>, color: "text-blue-600", bg: "bg-blue-600", link: "/dashboard/tasks" },
+          { title: "กำลังดำเนินการ", value: String(summary.inProgressCases), icon: <CheckCircle size={24}/>, color: "text-green-600", bg: "bg-green-600", link: "/dashboard/tasks" },
+          { title: "ใกล้ครบกำหนด", value: String(summary.nearDueCases), icon: <Clock size={24}/>, color: "text-amber-500", bg: "bg-amber-500", link: "/dashboard/near-due" },
+          { title: "เกินกำหนด", value: String(summary.overdueCases), icon: <AlertTriangle size={24}/>, color: "text-red-500", bg: "bg-red-500", link: "/dashboard/overdue", border: "border-red-200" },
+          { title: "ปิดงานแล้ว", value: String(summary.closedCases), icon: <CheckCircle size={24}/>, color: "text-teal-600", bg: "bg-teal-600", link: "/dashboard/closed" },
         ].map((stat, i) => (
           <div key={i} className={`bg-white rounded-2xl border ${stat.border || 'border-slate-200'} shadow-sm flex flex-col hover:-translate-y-1 transition-all`}>
             <div className="p-5 flex-1 text-center">
@@ -40,7 +84,7 @@ export default function DashboardPage() {
           <div className="w-40 h-40 rounded-full border-[16px] border-slate-100 flex items-center justify-center">
             <span className="text-slate-400 font-medium">0%</span>
           </div>
-          <p className="text-slate-400 text-sm mt-4">ไม่มีข้อมูล</p>
+          <p className="text-slate-400 text-sm mt-4">{isLoading ? "กำลังโหลดข้อมูล..." : "ไม่มีข้อมูล"}</p>
         </div>
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col min-h-[300px]">
           <h3 className="text-lg font-bold text-slate-800 mb-6">สถานะงานตามแผนก</h3>

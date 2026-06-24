@@ -1,9 +1,29 @@
 "use client";
-import React from "react";
+import React, { useEffect, useState } from "react";
 // เพิ่ม Search เข้ามาในบรรทัดนี้แล้วครับ
 import { Briefcase, CheckCircle, PauseCircle, FileText, Plus, Search } from "lucide-react";
 
 export default function ServicesPage() {
+  const [items, setItems] = useState<Array<{ serviceCode: string; serviceName: string; sla: string; departments: string; status: string; caseCount: number }>>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    async function loadItems() {
+      try {
+        const response = await fetch("/api/services", { cache: "no-store" });
+        const payload = await response.json();
+        if (active) setItems(response.ok && Array.isArray(payload.data) ? payload.data : []);
+      } catch {
+        if (active) setItems([]);
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    }
+    loadItems();
+    return () => { active = false; };
+  }, []);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex items-center justify-between">
@@ -18,8 +38,8 @@ export default function ServicesPage() {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {[
-          { title: "ประเภทบริการทั้งหมด", value: "0", color: "text-blue-600", bg: "bg-blue-100", icon: <Briefcase size={20}/> },
-          { title: "เปิดใช้งาน", value: "0", color: "text-green-600", bg: "bg-green-100", icon: <CheckCircle size={20}/> },
+          { title: "ประเภทบริการทั้งหมด", value: String(items.length), color: "text-blue-600", bg: "bg-blue-100", icon: <Briefcase size={20}/> },
+          { title: "เปิดใช้งาน", value: String(items.length), color: "text-green-600", bg: "bg-green-100", icon: <CheckCircle size={20}/> },
           { title: "ปิดใช้งาน", value: "0", color: "text-amber-500", bg: "bg-amber-100", icon: <PauseCircle size={20}/> },
           { title: "เอกสารทั้งหมด", value: "0", color: "text-slate-600", bg: "bg-slate-100", icon: <FileText size={20}/> },
         ].map((stat, i) => (
@@ -43,7 +63,24 @@ export default function ServicesPage() {
                 <thead className="bg-white text-slate-500 text-[11px] uppercase font-bold border-b border-slate-200">
                   <tr><th className="px-4 py-3">รหัสบริการ</th><th className="px-4 py-3 text-left">ชื่อบริการ</th><th className="px-4 py-3">SLA</th><th className="px-4 py-3">แผนก</th><th className="px-4 py-3">สถานะ</th><th className="px-4 py-3">จัดการ</th></tr>
                 </thead>
-                <tbody><tr><td colSpan={6} className="py-12 text-slate-400">ยังไม่มีข้อมูลประเภทบริการ</td></tr></tbody>
+                <tbody>
+                  {isLoading ? (
+                    <tr><td colSpan={6} className="py-12 text-slate-400">กำลังโหลดข้อมูล...</td></tr>
+                  ) : items.length > 0 ? (
+                    items.map((item) => (
+                      <tr key={item.serviceCode} className="border-b border-slate-100 text-slate-600 hover:bg-slate-50">
+                        <td className="px-4 py-3">{item.serviceCode}</td>
+                        <td className="px-4 py-3 text-left font-bold text-blue-600">{item.serviceName}</td>
+                        <td className="px-4 py-3">{item.sla}</td>
+                        <td className="px-4 py-3">{item.departments}</td>
+                        <td className="px-4 py-3">{item.status}</td>
+                        <td className="px-4 py-3">{item.caseCount} เคส</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr><td colSpan={6} className="py-12 text-slate-400">ยังไม่มีข้อมูลประเภทบริการ</td></tr>
+                  )}
+                </tbody>
               </table>
             </div>
           </div>

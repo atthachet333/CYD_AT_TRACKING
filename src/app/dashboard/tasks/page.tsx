@@ -1,8 +1,69 @@
 "use client";
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Search, Plus, Calendar, RefreshCcw, ClipboardList, CheckCircle, Clock, AlertTriangle } from "lucide-react";
+import { fetchMasterCases } from "../../../lib/services/googleSheetApi";
+import type { MasterCaseRow } from "../../../types";
+
+type UiCase = {
+  id: string;
+  customer: string;
+  workType: string;
+  country: string;
+  dateCreated: string;
+  dueDate: string;
+  department: string;
+  assignee: string;
+  status: string;
+  progress: string;
+  priority: string;
+};
+
+const emptyStats = {
+  total: 0,
+  inProgress: 0,
+  nearDue: 0,
+  overdue: 0,
+  closed: 0,
+};
 
 export default function TasksPage() {
+  const [cases, setCases] = useState<UiCase[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadCases() {
+      try {
+        setIsLoading(true);
+        setError("");
+        const rows = await fetchMasterCases();
+
+        if (isActive) {
+          setCases(rows.map(mapMasterCaseToUiCase));
+        }
+      } catch {
+        if (isActive) {
+          setCases([]);
+          setError("ไม่สามารถโหลดข้อมูลจาก Google Sheet ได้");
+        }
+      } finally {
+        if (isActive) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    loadCases();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  const stats = useMemo(() => calculateStats(cases), [cases]);
+
   return (
     <div className="flex flex-col xl:flex-row gap-6 animate-in fade-in duration-500">
       {/* ฝั่งซ้าย: เนื้อหาหลัก */}
@@ -20,11 +81,11 @@ export default function TasksPage() {
         {/* 5 Stat Cards */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           {[
-            { title: "เคสทั้งหมด", value: "0", color: "text-blue-600" },
-            { title: "กำลังดำเนินการ", value: "0", color: "text-green-600" },
-            { title: "ใกล้ครบกำหนด", value: "0", color: "text-amber-500" },
-            { title: "เกินกำหนด", value: "0", color: "text-red-500" },
-            { title: "ปิดงานแล้ว", value: "0", color: "text-teal-600" },
+            { title: "เคสทั้งหมด", value: String(stats.total), color: "text-blue-600" },
+            { title: "กำลังดำเนินการ", value: String(stats.inProgress), color: "text-green-600" },
+            { title: "ใกล้ครบกำหนด", value: String(stats.nearDue), color: "text-amber-500" },
+            { title: "เกินกำหนด", value: String(stats.overdue), color: "text-red-500" },
+            { title: "ปิดงานแล้ว", value: String(stats.closed), color: "text-teal-600" },
           ].map((stat, i) => (
             <div key={i} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
               <p className={`text-xs font-bold mb-2 ${stat.color}`}>{stat.title}</p>
@@ -61,6 +122,11 @@ export default function TasksPage() {
         {/* ตาราง */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
+            {error && (
+              <div className="border-b border-amber-100 bg-amber-50 px-6 py-3 text-sm text-amber-700">
+                {error}
+              </div>
+            )}
             <table className="w-full text-left text-sm whitespace-nowrap">
               <thead className="bg-slate-50 text-blue-600 text-xs font-bold border-b border-slate-200">
                 <tr>
@@ -77,7 +143,26 @@ export default function TasksPage() {
                 </tr>
               </thead>
               <tbody>
-                <tr><td colSpan={10} className="px-6 py-20 text-center text-slate-400 font-medium">ไม่พบข้อมูล</td></tr>
+                {isLoading ? (
+                  <tr><td colSpan={10} className="px-6 py-20 text-center text-slate-400 font-medium">กำลังโหลดข้อมูล...</td></tr>
+                ) : cases.length > 0 ? (
+                  cases.map((item) => (
+                    <tr key={item.id} className="border-b border-slate-100 text-slate-600 hover:bg-slate-50/80">
+                      <td className="px-6 py-4 font-bold text-blue-600">{item.id}</td>
+                      <td className="px-6 py-4">{item.customer}</td>
+                      <td className="px-6 py-4">{item.workType}</td>
+                      <td className="px-6 py-4">{item.country}</td>
+                      <td className="px-6 py-4">{item.dateCreated}</td>
+                      <td className="px-6 py-4">{item.dueDate}</td>
+                      <td className="px-6 py-4">{item.department}</td>
+                      <td className="px-6 py-4">{item.assignee}</td>
+                      <td className="px-6 py-4"><StatusBadge status={item.status} /></td>
+                      <td className="px-6 py-4 text-xs text-slate-500">{item.progress}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr><td colSpan={10} className="px-6 py-20 text-center text-slate-400 font-medium">ไม่พบข้อมูล</td></tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -97,4 +182,103 @@ export default function TasksPage() {
       </div>
     </div>
   );
+}
+
+function mapMasterCaseToUiCase(row: MasterCaseRow): UiCase {
+  const workType = displayValue(row.WORK_TYPE);
+  const caseId = displayValue(row.CASE_ID);
+  const documentStatus = displayValue(row.DOCUMENT_STATUS);
+  const adminStatus = displayValue(row.ADMIN_STATUS);
+
+  return {
+    id: caseId,
+    customer: displayValue(row.CUSTOMER_NAME || row.COMPANY_NAME),
+    workType,
+    country: "-",
+    dateCreated: displayValue(row.DATE_CREATED),
+    dueDate: displayValue(row.DUE_DATE),
+    department: displayValue(row.OWNER_DEPT),
+    assignee: displayValue(row.ASSIGNED_TO),
+    status: displayValue(row.CASE_STATUS),
+    progress: `${documentStatus} / ${adminStatus}`,
+    priority: displayValue(row.PRIORITY),
+  };
+}
+
+function calculateStats(items: UiCase[]) {
+  if (items.length === 0) {
+    return emptyStats;
+  }
+
+  const today = startOfDay(new Date());
+  const nearDueLimit = new Date(today);
+  nearDueLimit.setDate(today.getDate() + 7);
+
+  return {
+    total: items.length,
+    inProgress: items.filter((item) => !isClosedStatus(item.status)).length,
+    nearDue: items.filter((item) => isNearDue(item, today, nearDueLimit)).length,
+    overdue: items.filter((item) => isOverdue(item, today)).length,
+    closed: items.filter((item) => isClosedStatus(item.status)).length,
+  };
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const normalized = normalizeText(status);
+  const className =
+    normalized.includes("CLOSE") || normalized.includes("ปิด")
+      ? "bg-teal-50 text-teal-700 border-teal-200"
+      : normalized.includes("PENDING") || normalized.includes("รอ")
+        ? "bg-amber-50 text-amber-700 border-amber-200"
+        : "bg-blue-50 text-blue-700 border-blue-200";
+
+  return (
+    <span className={`inline-block rounded-full border px-3 py-1 text-xs font-bold ${className}`}>
+      {status}
+    </span>
+  );
+}
+
+function isNearDue(item: UiCase, today: Date, nearDueLimit: Date) {
+  if (isClosedStatus(item.status)) {
+    return false;
+  }
+
+  const dueDate = parseDate(item.dueDate);
+  return !!dueDate && dueDate >= today && dueDate <= nearDueLimit;
+}
+
+function isOverdue(item: UiCase, today: Date) {
+  if (isClosedStatus(item.status)) {
+    return false;
+  }
+
+  const dueDate = parseDate(item.dueDate);
+  return !!dueDate && dueDate < today;
+}
+
+function isClosedStatus(status: string) {
+  const normalized = normalizeText(status);
+  return normalized.includes("CLOSE") || normalized.includes("COMPLETE") || normalized.includes("ปิด") || normalized.includes("เสร็จ");
+}
+
+function parseDate(value: string) {
+  if (!value || value === "-") {
+    return null;
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : startOfDay(date);
+}
+
+function startOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function displayValue(value: string | undefined) {
+  return value && value.trim() ? value.trim() : "-";
+}
+
+function normalizeText(value: string) {
+  return value.trim().toUpperCase();
 }

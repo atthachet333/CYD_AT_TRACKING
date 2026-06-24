@@ -1,9 +1,39 @@
 "use client";
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Users, UserCheck, Activity, CalendarOff, Search, Plus } from "lucide-react";
+
+type StaffItem = {
+  name: string;
+  department: string;
+  position: string;
+  activeCases: number;
+  status: string;
+  role: string;
+};
 
 export default function StaffPage() {
   const [activeTab, setActiveTab] = useState("staff");
+  const [items, setItems] = useState<StaffItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    async function loadItems() {
+      try {
+        const response = await fetch("/api/staff", { cache: "no-store" });
+        const payload = await response.json();
+        if (active) setItems(response.ok && Array.isArray(payload.data) ? payload.data : []);
+      } catch {
+        if (active) setItems([]);
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    }
+    loadItems();
+    return () => { active = false; };
+  }, []);
+
+  const highLoad = useMemo(() => items.filter((item) => item.activeCases >= 3).length, [items]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -18,9 +48,9 @@ export default function StaffPage() {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {[
-          { title: "พนักงานทั้งหมด", value: "0", color: "text-blue-600", bg: "bg-blue-100", icon: <Users size={20}/> },
-          { title: "พนักงานออนไลน์", value: "0", color: "text-green-600", bg: "bg-green-100", icon: <UserCheck size={20}/> },
-          { title: "ภาระงานสูง", value: "0", color: "text-orange-500", bg: "bg-orange-100", icon: <Activity size={20}/> },
+          { title: "พนักงานทั้งหมด", value: String(items.length), color: "text-blue-600", bg: "bg-blue-100", icon: <Users size={20}/> },
+          { title: "พนักงานออนไลน์", value: String(items.length), color: "text-green-600", bg: "bg-green-100", icon: <UserCheck size={20}/> },
+          { title: "ภาระงานสูง", value: String(highLoad), color: "text-orange-500", bg: "bg-orange-100", icon: <Activity size={20}/> },
           { title: "ลางานวันนี้", value: "0", color: "text-red-500", bg: "bg-red-100", icon: <CalendarOff size={20}/> },
         ].map((stat, i) => (
           <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center justify-center hover:-translate-y-1 transition-transform">
@@ -46,7 +76,23 @@ export default function StaffPage() {
                 <thead className="bg-slate-50 text-slate-500 text-[11px] uppercase font-bold border-b border-slate-200">
                   <tr><th className="px-4 py-3 text-left">ชื่อพนักงาน</th><th className="px-4 py-3">แผนก</th><th className="px-4 py-3">ตำแหน่ง</th><th className="px-4 py-3">สถานะ</th><th className="px-4 py-3">สิทธิ์การใช้งาน</th></tr>
                 </thead>
-                <tbody><tr><td colSpan={5} className="py-12 text-slate-400">ยังไม่มีข้อมูลพนักงาน</td></tr></tbody>
+                <tbody>
+                  {isLoading ? (
+                    <tr><td colSpan={5} className="py-12 text-slate-400">กำลังโหลดข้อมูล...</td></tr>
+                  ) : items.length > 0 ? (
+                    items.map((item) => (
+                      <tr key={item.name} className="border-b border-slate-100 text-slate-600 hover:bg-slate-50">
+                        <td className="px-4 py-3 text-left font-bold text-blue-600">{item.name}</td>
+                        <td className="px-4 py-3">{item.department}</td>
+                        <td className="px-4 py-3">{item.position}</td>
+                        <td className="px-4 py-3">{item.status}</td>
+                        <td className="px-4 py-3">{item.role}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr><td colSpan={5} className="py-12 text-slate-400">ยังไม่มีข้อมูลพนักงาน</td></tr>
+                  )}
+                </tbody>
               </table>
             </div>
           </div>

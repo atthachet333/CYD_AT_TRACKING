@@ -1,8 +1,46 @@
 "use client";
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { CheckCircle, Clock, AlertCircle, Star, CalendarDays, Download, Search, FileText, Upload } from "lucide-react";
 
+type ClosedItem = {
+  caseId: string;
+  customer: string;
+  workType: string;
+  dateCreated: string;
+  closedDate: string;
+  durationDays: number | null;
+  closedBy: string;
+  result: string;
+  summaryDocument: string;
+};
+
 export default function ClosedPage() {
+  const [items, setItems] = useState<ClosedItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    async function loadItems() {
+      try {
+        const response = await fetch("/api/jobs/closed", { cache: "no-store" });
+        const payload = await response.json();
+        if (active) setItems(response.ok && Array.isArray(payload.data) ? payload.data : []);
+      } catch {
+        if (active) setItems([]);
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    }
+    loadItems();
+    return () => { active = false; };
+  }, []);
+
+  const stats = useMemo(() => ({
+    closed: items.length,
+    onTime: items.filter((item) => (item.durationDays ?? 0) <= 7).length,
+    late: items.filter((item) => (item.durationDays ?? 0) > 7).length,
+  }), [items]);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10">
       
@@ -15,9 +53,9 @@ export default function ClosedPage() {
       {/* 4 Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { title: "ปิดงานเดือนนี้", value: "0", sub: "0.0%", trend: "0.0%", trendUp: true, color: "text-blue-600", bg: "bg-blue-600", icon: <CheckCircle size={24}/> },
-          { title: "ปิดตรงเวลา", value: "0", sub: "(0.0%)", trend: "0.0%", trendUp: true, color: "text-green-600", bg: "bg-green-600", icon: <CheckCircle size={24}/> },
-          { title: "ปิดล่าช้า", value: "0", sub: "(0.0%)", trend: "0.0%", trendUp: false, color: "text-red-600", bg: "bg-red-600", icon: <Clock size={24}/> },
+          { title: "ปิดงานเดือนนี้", value: String(stats.closed), sub: "0.0%", trend: "0.0%", trendUp: true, color: "text-blue-600", bg: "bg-blue-600", icon: <CheckCircle size={24}/> },
+          { title: "ปิดตรงเวลา", value: String(stats.onTime), sub: "(0.0%)", trend: "0.0%", trendUp: true, color: "text-green-600", bg: "bg-green-600", icon: <CheckCircle size={24}/> },
+          { title: "ปิดล่าช้า", value: String(stats.late), sub: "(0.0%)", trend: "0.0%", trendUp: false, color: "text-red-600", bg: "bg-red-600", icon: <Clock size={24}/> },
           { title: "คะแนนความพึงพอใจ", value: "0.00", sub: "จาก 5.00", trend: "0.00", trendUp: true, color: "text-blue-600", bg: "bg-blue-600", icon: <Star size={24}/> },
         ].map((stat, i) => (
           <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col hover:-translate-y-1 transition-transform">
@@ -89,7 +127,25 @@ export default function ClosedPage() {
               </tr>
             </thead>
             <tbody>
-              <tr><td colSpan={9} className="px-6 py-16 text-slate-400 font-medium">ยังไม่มีข้อมูลการปิดงาน</td></tr>
+              {isLoading ? (
+                <tr><td colSpan={9} className="px-6 py-16 text-slate-400 font-medium">กำลังโหลดข้อมูล...</td></tr>
+              ) : items.length > 0 ? (
+                items.map((item) => (
+                  <tr key={item.caseId} className="border-b border-slate-100 text-slate-600 hover:bg-slate-50">
+                    <td className="px-6 py-4 text-left font-bold text-blue-600">{item.caseId}</td>
+                    <td className="px-6 py-4 text-left">{item.customer}</td>
+                    <td className="px-6 py-4 text-left">{item.workType}</td>
+                    <td className="px-6 py-4">{item.dateCreated}</td>
+                    <td className="px-6 py-4">{item.closedDate}</td>
+                    <td className="px-6 py-4">{item.durationDays ?? "-"}</td>
+                    <td className="px-6 py-4">{item.closedBy}</td>
+                    <td className="px-6 py-4">{item.result}</td>
+                    <td className="px-6 py-4">{item.summaryDocument}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr><td colSpan={9} className="px-6 py-16 text-slate-400 font-medium">ยังไม่มีข้อมูลการปิดงาน</td></tr>
+              )}
             </tbody>
           </table>
         </div>

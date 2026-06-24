@@ -1,0 +1,74 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model JobCase {
+  id             String    @id @default(cuid())
+  caseId         String    @unique
+  dateCreated    DateTime?
+  customerName   String?
+  companyName    String?
+  workType       String?
+  priority       String?
+  ownerDept      String?
+  assignedTo     String?
+  caseStatus     String?
+  documentStatus String?
+  adminStatus    String?
+  dueDate        DateTime?
+  note           String?
+  sourceSheet    String    @default("MASTER_CASE")
+  sourceHash     String?
+  lastSyncedAt   DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([caseStatus])
+  @@index([priority])
+  @@index([ownerDept])
+  @@index([assignedTo])
+  @@index([dueDate])
+  @@index([lastSyncedAt])
+}
+
+model SheetSyncLog {
+  id           String    @id @default(cuid())
+  sheetName    String
+  status       String
+  startedAt    DateTime  @default(now())
+  finishedAt   DateTime?
+  rowsFetched  Int       @default(0)
+  rowsCreated  Int       @default(0)
+  rowsUpdated  Int       @default(0)
+  rowsSkipped  Int       @default(0)
+  errorMessage String?
+  triggeredBy  String?
+
+  @@index([sheetName])
+  @@index([status])
+  @@index([startedAt])
+}
+
+model DashboardSnapshot {
+  id                   String   @id @default(cuid())
+  totalCases           Int      @default(0)
+  closedCases          Int      @default(0)
+  inProgressCases      Int      @default(0)
+  urgentCases          Int      @default(0)
+  missingDocumentCases Int      @default(0)
+  nearDueCases         Int      @default(0)
+  overdueCases         Int      @default(0)
+  generatedAt          DateTime @default(now())
+
+  @@index([generatedAt])
+}

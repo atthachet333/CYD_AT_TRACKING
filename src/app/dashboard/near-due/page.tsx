@@ -1,8 +1,57 @@
 "use client";
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Search, CalendarDays } from "lucide-react";
 
+type NearDueItem = {
+  caseId: string;
+  customer: string;
+  workType: string;
+  dueDate: string;
+  remainingDays: number | null;
+  department: string;
+  assignee: string;
+  status: string;
+  priority: string;
+};
+
 export default function NearDuePage() {
+  const [items, setItems] = useState<NearDueItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadItems() {
+      try {
+        setIsLoading(true);
+        setError("");
+        const response = await fetch("/api/jobs/near-due", { cache: "no-store" });
+        const payload = await response.json();
+        if (active) setItems(response.ok && Array.isArray(payload.data) ? payload.data : []);
+      } catch {
+        if (active) {
+          setItems([]);
+          setError("ไม่สามารถโหลดข้อมูลงานใกล้ครบกำหนดได้");
+        }
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    }
+
+    loadItems();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const stats = useMemo(() => ({
+    oneDay: items.filter((item) => (item.remainingDays ?? 99) <= 1).length,
+    threeDays: items.filter((item) => (item.remainingDays ?? 99) <= 3).length,
+    sevenDays: items.length,
+    urgent: items.filter((item) => item.priority.toUpperCase() === "HIGH" || (item.remainingDays ?? 99) <= 1).length,
+  }), [items]);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       {/* Header */}
@@ -14,10 +63,10 @@ export default function NearDuePage() {
       {/* 4 Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {[
-          { title: "ครบภายใน 1 วัน", value: "0", color: "text-blue-600" },
-          { title: "ครบภายใน 3 วัน", value: "0", color: "text-green-600" },
-          { title: "ครบภายใน 7 วัน", value: "0", color: "text-amber-500" },
-          { title: "ต้องเร่งติดตาม", value: "0", color: "text-red-500", border: "border-red-200" },
+          { title: "ครบภายใน 1 วัน", value: String(stats.oneDay), color: "text-blue-600" },
+          { title: "ครบภายใน 3 วัน", value: String(stats.threeDays), color: "text-green-600" },
+          { title: "ครบภายใน 7 วัน", value: String(stats.sevenDays), color: "text-amber-500" },
+          { title: "ต้องเร่งติดตาม", value: String(stats.urgent), color: "text-red-500", border: "border-red-200" },
         ].map((stat, i) => (
           <div key={i} className={`bg-white p-6 rounded-2xl border ${stat.border || 'border-slate-200'} shadow-sm text-center`}>
             <p className={`text-sm font-bold mb-3 ${stat.color}`}>{stat.title}</p>
@@ -95,10 +144,10 @@ export default function NearDuePage() {
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm min-h-[250px] flex flex-col items-center justify-center text-slate-400">
           <CalendarDays size={32} className="text-slate-300 mb-3" />
           <p className="font-medium">ปฏิทินวันครบกำหนด</p>
-          <p className="text-xs mt-1">(ไม่มีข้อมูลการจองวัน)</p>
+          <p className="text-xs mt-1">{isLoading ? "กำลังโหลดข้อมูล..." : "(ไม่มีข้อมูลการจองวัน)"}</p>
         </div>
         <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm min-h-[250px] flex flex-col items-center justify-center text-slate-400">
-          <p className="font-medium text-lg">ไม่มีการแจ้งเตือนเคสเร่งด่วน</p>
+          <p className="font-medium text-lg">{items.length > 0 ? `มีเคสใกล้ครบกำหนด ${items.length} เคส` : "ไม่มีการแจ้งเตือนเคสเร่งด่วน"}</p>
         </div>
       </div>
 
@@ -119,7 +168,24 @@ export default function NearDuePage() {
               </tr>
             </thead>
             <tbody>
-              <tr><td colSpan={8} className="px-6 py-16 text-center text-slate-400">ยังไม่มีข้อมูลเคสใกล้ครบกำหนด</td></tr>
+              {isLoading ? (
+                <tr><td colSpan={8} className="px-6 py-16 text-center text-slate-400">กำลังโหลดข้อมูล...</td></tr>
+              ) : items.length > 0 ? (
+                items.map((item) => (
+                  <tr key={item.caseId} className="border-b border-slate-100 text-slate-600 hover:bg-slate-50">
+                    <td className="px-6 py-4 font-bold text-blue-600">{item.caseId}</td>
+                    <td className="px-6 py-4">{item.customer}</td>
+                    <td className="px-6 py-4">{item.workType}</td>
+                    <td className="px-6 py-4">{item.dueDate}</td>
+                    <td className="px-6 py-4">{item.remainingDays ?? "-"}</td>
+                    <td className="px-6 py-4">{item.department}</td>
+                    <td className="px-6 py-4">{item.assignee}</td>
+                    <td className="px-6 py-4">{item.status}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr><td colSpan={8} className="px-6 py-16 text-center text-slate-400">{error || "ยังไม่มีข้อมูลเคสใกล้ครบกำหนด"}</td></tr>
+              )}
             </tbody>
           </table>
         </div>

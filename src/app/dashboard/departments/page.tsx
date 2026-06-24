@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { 
   Users, UserCheck, Activity, CalendarOff, Search, 
   Filter, Plus, Building2, PieChart, Info 
@@ -8,6 +8,37 @@ import {
 export default function StaffAndDepartmentsPage() {
   // สร้าง State สำหรับสลับ Tab
   const [activeTab, setActiveTab] = useState("staff");
+  const [staff, setStaff] = useState<Array<{ name: string; department: string; position: string; activeCases: number; status: string; role: string }>>([]);
+  const [departments, setDepartments] = useState<Array<{ name: string; lead: string; memberCount: number; averageLoad: number; slaScope: string; caseCount: number }>>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    async function loadItems() {
+      try {
+        const [staffResponse, deptResponse] = await Promise.all([
+          fetch("/api/staff", { cache: "no-store" }),
+          fetch("/api/departments", { cache: "no-store" }),
+        ]);
+        const [staffPayload, deptPayload] = await Promise.all([staffResponse.json(), deptResponse.json()]);
+        if (active) {
+          setStaff(staffResponse.ok && Array.isArray(staffPayload.data) ? staffPayload.data : []);
+          setDepartments(deptResponse.ok && Array.isArray(deptPayload.data) ? deptPayload.data : []);
+        }
+      } catch {
+        if (active) {
+          setStaff([]);
+          setDepartments([]);
+        }
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    }
+    loadItems();
+    return () => { active = false; };
+  }, []);
+
+  const highLoad = useMemo(() => staff.filter((item) => item.activeCases >= 3).length, [staff]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -38,9 +69,9 @@ export default function StaffAndDepartmentsPage() {
       {/* 2. Stat Cards (4 ช่อง) */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {[
-          { title: "พนักงานทั้งหมด", value: "0", color: "text-blue-600", bg: "bg-blue-100", icon: <Users size={24}/> },
-          { title: "พนักงานออนไลน์", value: "0", color: "text-green-600", bg: "bg-green-100", icon: <UserCheck size={24}/> },
-          { title: "ภาระงานสูง", value: "0", color: "text-orange-500", bg: "bg-orange-100", icon: <Activity size={24}/> },
+          { title: "พนักงานทั้งหมด", value: String(staff.length), color: "text-blue-600", bg: "bg-blue-100", icon: <Users size={24}/> },
+          { title: "พนักงานออนไลน์", value: String(staff.length), color: "text-green-600", bg: "bg-green-100", icon: <UserCheck size={24}/> },
+          { title: "ภาระงานสูง", value: String(highLoad), color: "text-orange-500", bg: "bg-orange-100", icon: <Activity size={24}/> },
           { title: "ลางานวันนี้", value: "0", color: "text-red-500", bg: "bg-red-100", icon: <CalendarOff size={24}/> },
         ].map((stat, i) => (
           <div key={i} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center justify-center hover:-translate-y-1 transition-transform">
@@ -89,16 +120,24 @@ export default function StaffAndDepartmentsPage() {
               </tr>
             </thead>
             <tbody>
-              {/* Empty State */}
-              <tr>
-                <td colSpan={8} className="py-20 text-center">
-                  <div className="flex flex-col items-center justify-center text-slate-400">
-                    <Users size={48} className="text-slate-300 mb-4" />
-                    <p className="font-semibold text-base text-slate-600">ยังไม่มีข้อมูลพนักงาน</p>
-                    <p className="text-sm mt-1">คลิกปุ่ม "+ เพิ่มพนักงาน" เพื่อเริ่มต้นเพิ่มข้อมูล</p>
-                  </div>
-                </td>
-              </tr>
+              {isLoading ? (
+                <tr><td colSpan={8} className="py-20 text-center text-slate-400">กำลังโหลดข้อมูล...</td></tr>
+              ) : staff.length > 0 ? (
+                staff.map((item) => (
+                  <tr key={item.name} className="border-b border-slate-100 text-slate-600 hover:bg-slate-50">
+                    <td className="px-6 py-4 text-left font-bold text-blue-600">{item.name}</td>
+                    <td className="px-6 py-4">{item.department}</td>
+                    <td className="px-6 py-4">{item.position}</td>
+                    <td className="px-6 py-4">{item.activeCases}</td>
+                    <td className="px-6 py-4">{item.status}</td>
+                    <td className="px-6 py-4">-</td>
+                    <td className="px-6 py-4">{item.role}</td>
+                    <td className="px-6 py-4">-</td>
+                  </tr>
+                ))
+              ) : (
+                <tr><td colSpan={8} className="py-20 text-center text-slate-400">ยังไม่มีข้อมูลพนักงาน</td></tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -144,11 +183,17 @@ export default function StaffAndDepartmentsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr>
-                    <td colSpan={5} className="py-12 text-slate-400 border-b border-slate-100 border-dashed">
-                      ไม่มีข้อมูลแผนก
-                    </td>
-                  </tr>
+                  {departments.length > 0 ? departments.map((item) => (
+                    <tr key={item.name} className="border-b border-slate-100 text-slate-600 hover:bg-slate-50">
+                      <td className="px-4 py-3 text-left font-bold text-blue-600">{item.name}</td>
+                      <td className="px-4 py-3 text-left">{item.lead}</td>
+                      <td className="px-4 py-3">{item.memberCount}</td>
+                      <td className="px-4 py-3 text-left">{item.averageLoad} เคส</td>
+                      <td className="px-4 py-3">{item.slaScope}</td>
+                    </tr>
+                  )) : (
+                    <tr><td colSpan={5} className="py-12 text-slate-400 border-b border-slate-100 border-dashed">ไม่มีข้อมูลแผนก</td></tr>
+                  )}
                 </tbody>
               </table>
             </div>

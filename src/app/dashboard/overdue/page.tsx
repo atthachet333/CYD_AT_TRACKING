@@ -1,8 +1,50 @@
 "use client";
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Search, Download, RefreshCcw, Eye, Edit, Trash2 } from "lucide-react";
 
+type OverdueItem = {
+  caseId: string;
+  customer: string;
+  workType: string;
+  dueDate: string;
+  overdueDays: number;
+  reason: string;
+  assignee: string;
+  risk: string;
+  department: string;
+};
+
 export default function OverduePage() {
+  const [items, setItems] = useState<OverdueItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    async function loadItems() {
+      try {
+        const response = await fetch("/api/jobs/overdue", { cache: "no-store" });
+        const payload = await response.json();
+        if (active) setItems(response.ok && Array.isArray(payload.data) ? payload.data : []);
+      } catch {
+        if (active) setItems([]);
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    }
+    loadItems();
+    return () => { active = false; };
+  }, []);
+
+  const stats = useMemo(() => {
+    const total = items.length || 1;
+    const oneToThree = items.filter((item) => item.overdueDays >= 1 && item.overdueDays <= 3).length;
+    const fourToSeven = items.filter((item) => item.overdueDays >= 4 && item.overdueDays <= 7).length;
+    const moreThanSeven = items.filter((item) => item.overdueDays > 7).length;
+    const highRisk = items.filter((item) => item.risk === "High").length;
+    const percent = (count: number) => `${((count / total) * 100).toFixed(1)}%`;
+    return { oneToThree, fourToSeven, moreThanSeven, highRisk, percent };
+  }, [items]);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       
@@ -16,10 +58,10 @@ export default function OverduePage() {
       {/* 4 Stat Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { title: "เกิน 1-3 วัน", value: "0", percent: "0.0%", emoji: "📅" },
-          { title: "เกิน 4-7 วัน", value: "0", percent: "0.0%", emoji: "📆" },
-          { title: "เกิน 7 วัน", value: "0", percent: "0.0%", emoji: "🗓️" },
-          { title: "เสี่ยงสูง", value: "0", percent: "0.0%", emoji: "⚠️", border: "border-red-200 shadow-red-50" },
+          { title: "เกิน 1-3 วัน", value: String(stats.oneToThree), percent: stats.percent(stats.oneToThree), emoji: "📅" },
+          { title: "เกิน 4-7 วัน", value: String(stats.fourToSeven), percent: stats.percent(stats.fourToSeven), emoji: "📆" },
+          { title: "เกิน 7 วัน", value: String(stats.moreThanSeven), percent: stats.percent(stats.moreThanSeven), emoji: "🗓️" },
+          { title: "เสี่ยงสูง", value: String(stats.highRisk), percent: stats.percent(stats.highRisk), emoji: "⚠️", border: "border-red-200 shadow-red-50" },
         ].map((stat, i) => (
           <div key={i} className={`bg-white p-5 rounded-2xl border ${stat.border || 'border-slate-200'} shadow-sm text-center`}>
             <p className="text-sm font-bold mb-2 text-red-600 flex items-center justify-center gap-1.5">
@@ -38,7 +80,7 @@ export default function OverduePage() {
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center">
           <h3 className="w-full text-sm font-bold text-slate-800 mb-6">สาเหตุของงานเกินกำหนด</h3>
           <div className="w-40 h-40 rounded-full border-[16px] border-slate-100 flex items-center justify-center text-slate-300 font-bold">
-            0<br/>เคส
+            {items.length}<br/>เคส
           </div>
         </div>
         
@@ -46,7 +88,7 @@ export default function OverduePage() {
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center">
           <h3 className="w-full text-sm font-bold text-slate-800 mb-6">งานเกินกำหนดแยกตามแผนก</h3>
           <div className="flex-1 w-full border-l border-b border-slate-100 flex items-center justify-center text-slate-400 text-sm">
-            ไม่มีข้อมูล
+            {items.length > 0 ? `${items.length} เคส` : "ไม่มีข้อมูล"}
           </div>
         </div>
 
@@ -95,7 +137,25 @@ export default function OverduePage() {
               </tr>
             </thead>
             <tbody>
-              <tr><td colSpan={9} className="px-6 py-12 text-slate-400">ยังไม่มีข้อมูล</td></tr>
+              {isLoading ? (
+                <tr><td colSpan={9} className="px-6 py-12 text-slate-400">กำลังโหลดข้อมูล...</td></tr>
+              ) : items.length > 0 ? (
+                items.map((item) => (
+                  <tr key={item.caseId} className="border-b border-slate-100 text-slate-600 hover:bg-slate-50">
+                    <td className="px-4 py-3 text-left font-bold text-red-600">{item.caseId}</td>
+                    <td className="px-4 py-3 text-left">{item.customer}</td>
+                    <td className="px-4 py-3 text-left">{item.workType}</td>
+                    <td className="px-4 py-3">{item.dueDate}</td>
+                    <td className="px-4 py-3">{item.overdueDays}</td>
+                    <td className="px-4 py-3 text-left">{item.reason}</td>
+                    <td className="px-4 py-3">{item.assignee}</td>
+                    <td className="px-4 py-3">{item.risk}</td>
+                    <td className="px-4 py-3">ติดตาม</td>
+                  </tr>
+                ))
+              ) : (
+                <tr><td colSpan={9} className="px-6 py-12 text-slate-400">ยังไม่มีข้อมูล</td></tr>
+              )}
             </tbody>
           </table>
         </div>

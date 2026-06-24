@@ -1,8 +1,25 @@
 "use client";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Building, Users, Bell, Clock, Database, Save } from "lucide-react";
 
 export default function SettingsPage() {
+  const [configCount, setConfigCount] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    async function loadConfig() {
+      try {
+        const response = await fetch("/api/settings", { cache: "no-store" });
+        const payload = await response.json();
+        if (active) setConfigCount(response.ok && Array.isArray(payload.data) ? payload.data.length : 0);
+      } catch {
+        if (active) setConfigCount(0);
+      }
+    }
+    loadConfig();
+    return () => { active = false; };
+  }, []);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-4xl">
       <h1 className="text-3xl font-bold text-slate-800">ตั้งค่าระบบ</h1>
@@ -15,6 +32,7 @@ export default function SettingsPage() {
                <div><label className="text-xs font-bold text-slate-600">ชื่อบริษัท</label><input type="text" defaultValue="CHAIDET PROGRESS CO., LTD." className="w-full p-2.5 mt-1 rounded-xl border border-slate-200 text-sm bg-slate-50" disabled /></div>
                <div><label className="text-xs font-bold text-slate-600">อีเมลติดต่อ</label><input type="text" placeholder="info@chaidetprogress.co.th" className="w-full p-2.5 mt-1 rounded-xl border border-slate-200 text-sm" /></div>
             </div>
+            <p className="mt-3 text-xs text-slate-400">โหลด CONFIG จาก Sheet แล้ว {configCount} รายการ</p>
          </div>
 
          {/* การแจ้งเตือน & SLA */}
