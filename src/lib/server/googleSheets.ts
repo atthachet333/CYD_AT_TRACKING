@@ -21,16 +21,26 @@ export interface SheetApiResponse {
   [key: string]: unknown;
 }
 
-const SHEET_CACHE_TTL_MS = 60_000;
-const SHEET_FETCH_TIMEOUT_MS = 8_000;
-const sheetCache = new Map<
+type SheetCache = Map<
   SheetName,
   {
     expiresAt: number;
     response: SheetApiResponse;
   }
->();
-const pendingSheetRequests = new Map<SheetName, Promise<SheetApiResponse>>();
+>;
+
+declare global {
+  var __CYD_SHEET_CACHE__: SheetCache | undefined;
+  var __CYD_PENDING_SHEET_REQUESTS__: Map<SheetName, Promise<SheetApiResponse>> | undefined;
+}
+
+const SHEET_CACHE_TTL_MS = 60_000;
+const SHEET_FETCH_TIMEOUT_MS = 8_000;
+const sheetCache = globalThis.__CYD_SHEET_CACHE__ ?? new Map();
+const pendingSheetRequests = globalThis.__CYD_PENDING_SHEET_REQUESTS__ ?? new Map();
+
+globalThis.__CYD_SHEET_CACHE__ = sheetCache;
+globalThis.__CYD_PENDING_SHEET_REQUESTS__ = pendingSheetRequests;
 
 export class GoogleSheetsError extends Error {
   status: number;
@@ -73,7 +83,7 @@ export async function fetchSheet(sheetName: string): Promise<SheetApiResponse> {
   const cached = sheetCache.get(sheetName);
 
   if (cached && cached.expiresAt > Date.now()) {
-    logSheetTiming(sheetName, "cache=hit", startedAt, cached.response.data.length);
+    logSheetTiming(sheetName, "global-cache=hit", startedAt, cached.response.data.length);
     return cached.response;
   }
 
@@ -192,7 +202,7 @@ async function fetchSheetFromUpstream(sheetName: SheetName, startedAt: number): 
     response: sheetResponse,
   });
 
-  logSheetTiming(sheetName, "cache=miss", startedAt, sheetResponse.data.length);
+  logSheetTiming(sheetName, "global-cache=miss", startedAt, sheetResponse.data.length);
   return sheetResponse;
 }
 
